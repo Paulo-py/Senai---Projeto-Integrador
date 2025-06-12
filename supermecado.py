@@ -1,6 +1,8 @@
 import math
 import time
 import sys
+import os
+import getpass
 
 """
 Este é um sistema de controle de estoque para um mercado rápido.
@@ -15,10 +17,17 @@ def cadastroUsuarios():
     usuarios = {}
     print("=== CADASTRO DE USUÁRIOS ===")
     while True:
-        usuario = input("Digite o nome do usuário (ou 'sair' para encerrar): ")
+        usuario = input("Digite o nome do usuário (digite 'sair' para encerrar cadastro): ")
         if usuario.lower() == 'sair':
             break
-        senha = input("Digite a senha do usuário: ")
+        senha = getpass.getpass("Digite a senha do usuário: ")
+        if not senha:
+            print("Senha não pode ser vazia")
+            continue
+        # Verifica se a senha é forte o suficiente
+        if len(senha) < 8:
+            print("Senha fraca! A senha deve ter pelo menos 8 caracteres")
+            continue
         usuarios[usuario] = senha
         print(f"Usuário '{usuario}' cadastrado com sucesso!")
     return usuarios
@@ -26,7 +35,7 @@ def cadastroUsuarios():
 def verificarUsuario(usuarios):
     """
     Função para verificar se o usuário e senha estão corretos.
-    Permite até 3 tentativas de login apenas para senhas incorretas.
+    Retorna o nome do usuário se autenticado, None caso contrário.
     """
     if not isinstance(usuarios, dict):
         raise ValueError("usuarios deve ser um dicionário")
@@ -44,31 +53,31 @@ def verificarUsuario(usuarios):
             print("Usuário não pode ser vazio")
             continue
             
-        # Verifica se o usuário existe
         if usuario not in usuarios:
             print("Usuário não cadastrado. Tente novamente.")
-            continue  # Não desconta tentativa
+            continue
             
-        senha = input("Digite a senha do usuário: ").strip()
+        senha = getpass.getpass("Digite a senha: ")
+    
         if not senha:
             print("Senha não pode ser vazia")
             continue
         
-        # Verifica se a senha está correta
         if usuarios[usuario] == senha:
             print("Usuário autenticado com sucesso!")
-            return True
+            return usuario  # Retorna o nome do usuário
         else:
-            tentativas -= 1  # Só desconta tentativa para senha errada
+            tentativas -= 1
             if tentativas > 0:
                 print(f"Senha incorreta. Você tem {tentativas} tentativas restantes.")
             else:
                 print("Número máximo de tentativas excedido. Acesso negado.")
     
-    return False
+    return None
 
 def entradaProduto():
     produtos = []  # Lista para armazenar os produtos
+    precos = {}    # Dicionário para armazenar os preços
 
     while True:
         try:
@@ -113,6 +122,15 @@ def entradaProduto():
             continue
         
         try:
+            preco = float(input(f"Digite o preço do produto {nome}: R$ "))
+            if preco < 0:
+                print("Preço inválido. O preço não pode ser negativo.")
+                continue
+        except ValueError:
+            print("Por favor, informe um valor numérico válido para o preço.")
+            continue
+
+        try:
             estoque_Min = int(input("Informe a quantidade mínima de estoque recomendada: "))
             if estoque_Min <= 0:
                 print("QUANTIDADE MÍNIMA INVÁLIDA!")
@@ -135,7 +153,8 @@ def entradaProduto():
             "nome": nome, 
             "qntdRecebida": qntdRecebida, 
             "estoque_Min": estoque_Min, 
-            "estoque_Max": estoque_Max
+            "estoque_Max": estoque_Max,
+            "preco": preco  # Adicionando preço ao dicionário do produto
         })
         print(f"Produto {nome} cadastrado com sucesso!")
 
@@ -175,30 +194,6 @@ def saidaProduto(produtos):
         except ValueError:
             print("Entrada inválida. Por favor, insira um número válido.")
 
-def cadastrarPrecos(produtos):
-    precos = {}
-    for produto in produtos:
-        while True:
-            try:
-                preco = float(input(f"Digite o preço do produto {produto['nome']} (código {produto['codigo']}): R$ "))
-                if preco < 0:
-                    print("Preço inválido. O preço não pode ser negativo.")
-                    continue
-                precos[produto['codigo']] = preco
-                break
-            except ValueError:
-                print("Entrada inválida. Por favor, insira um valor numérico válido.")
-    return precos
-
-def consultarEstoque(produtos):
-    print("\nEstoque de produtos:")
-    if not produtos:
-        print("Nenhum produto cadastrado no estoque.")
-        return
-        
-    for produto in produtos:
-        print(f"Código: {produto['codigo']} | Nome: {produto['nome']} | Quantidade em Estoque: {produto['qntdRecebida']} | Estoque Mínimo: {produto['estoque_Min']} | Estoque Máximo: {produto['estoque_Max']}")
-
 def calcularValorTotalEstoque(produtos, precos):
     valor_total = 0.0
     for produto in produtos:
@@ -209,6 +204,80 @@ def calcularValorTotalEstoque(produtos, precos):
             print(f"Preço não cadastrado para o produto {produto['nome']} (código {codigo}).")
     return valor_total
 
+def consultarEstoque(produtos):
+    """
+    Função para consultar estoque de produtos com detalhes completos.
+    Adaptada do código VisuAlg para Python.
+    """
+    if not produtos:
+        print("Nenhum produto cadastrado.")
+        return
+    
+    print()
+    print("=== CONSULTA DE ESTOQUE ===")
+    print("Produtos disponíveis:")
+    
+    # Lista todos os produtos disponíveis
+    for i, produto in enumerate(produtos, 1):
+        print(f"{i} - {produto['nome']} (Estoque: {produto['qntdRecebida']})")
+    
+    try:
+        codigo_produto = int(input(f"Digite o código do produto para consulta detalhada (1-{len(produtos)}): "))
+        
+        if 1 <= codigo_produto <= len(produtos):
+            produto = produtos[codigo_produto - 1]  # Ajuste para índice baseado em 0
+            
+            print()
+            print("DETALHES DO PRODUTO:")
+            print(f"Nome: {produto['nome']}")
+            print(f"Estoque atual: {produto['qntdRecebida']} unidades")
+            print(f"Estoque mínimo: {produto['estoque_Min']} unidades")
+            print(f"Capacidade máxima: {produto['estoque_Max']} unidades")
+            print(f"Preço unitário: R$ {produto['preco']:.2f}")
+            print(f"Valor total em estoque: R$ {(produto['qntdRecebida'] * produto['preco']):.2f}")
+            
+            # Status do estoque
+            if produto['qntdRecebida'] <= produto['estoque_Min']:
+                print("Status: CRÍTICO - Estoque baixo!")
+            elif produto['qntdRecebida'] >= produto['estoque_Max']:
+                print("Status: ATENÇÃO - Estoque no limite!")
+            else:
+                print("Status: NORMAL")
+        else:
+            print("Código de produto inválido!")
+            
+    except ValueError:
+        print("Por favor, digite um número válido!")
+
+def relatorioCompleto(produtos, nome_funcionario="Sistema"): #Função para gerar relatório completo do estoque.
+    
+    if not produtos:
+        print("Nenhum produto cadastrado.")
+        return
+    
+    print()
+    print("=== RELATÓRIO COMPLETO DO ESTOQUE ===")
+    print(f"Funcionário: {nome_funcionario}")
+    print(f"Total de produtos cadastrados: {len(produtos)}")
+    print()
+    
+    valor_total_geral = 0
+    
+    for i, produto in enumerate(produtos, 1):
+        valor_produto = produto['qntdRecebida'] * produto['preco']
+        valor_total_geral += valor_produto
+        
+        print(f"Produto {i}: {produto['nome']}")
+        print(f"  Estoque: {produto['qntdRecebida']}/{produto['estoque_Max']} (Mín: {produto['estoque_Min']})")
+        print(f"  Preço: R$ {produto['preco']:.2f}")
+        print(f"  Valor em estoque: R$ {valor_produto:.2f}")
+        
+        if produto['qntdRecebida'] <= produto['estoque_Min']:
+            print("  Status: CRÍTICO")
+        else:
+            print("  Status: NORMAL")
+        print()
+
 # Execução principal
 if __name__ == "__main__":
     print("===================================")
@@ -218,12 +287,13 @@ if __name__ == "__main__":
     
     # Autenticação de usuário
     usuarios = cadastroUsuarios()
+    usuario_logado = verificarUsuario(usuarios)
     
-    if not verificarUsuario(usuarios):
+    if not usuario_logado:
         print("Acesso negado. Encerrando sistema.")
         sys.exit()
     
-    print("Acesso liberado!")
+    print(f"Acesso liberado! Bem-vindo(a), {usuario_logado}!")
     
     # Inicialização das variáveis
     lista_produtos = []
@@ -236,12 +306,10 @@ if __name__ == "__main__":
         print("1 - Entrada de produtos (Recebimento)")
         print("2 - Saída de produtos (Reposição)")
         print("3 - Consultar estoque")
-        print("4 - Cadastrar novo produto")
-        print("5 - Relatório de produtos em falta")
-        print("6 - Relatório completo do estoque")
-        print("7 - Cadastrar preços dos produtos")
-        print("8 - Calcular valor total do estoque")
-        print("9 - Sair do sistema")
+        print("4 - Relatório de produtos em falta")
+        print("5 - Relatório completo do estoque")
+        print("6 - Calcular valor total do estoque")
+        print("7 - Sair do sistema")
         print("========================================")
         
         opcao = input("Escolha uma opção: ").strip()
@@ -259,15 +327,9 @@ if __name__ == "__main__":
                 print("Nenhum produto cadastrado.")
                 
         elif opcao == "3":
-            consultarEstoque(lista_produtos)
-            
+            consultarEstoque(lista_produtos)          
+                
         elif opcao == "4":
-            novos = entrada
-            Produto()
-            lista_produtos.extend(novos)
-                
-                
-        elif opcao == "5":
             print("\nProdutos em falta:")
             produtos_em_falta = False
             for produto in lista_produtos:
@@ -277,25 +339,18 @@ if __name__ == "__main__":
             if not produtos_em_falta:
                 print("Nenhum produto em falta.")
                 
-        elif opcao == "6":
+        elif opcao == "5":
             print("\nRelatório completo do estoque:")
-            consultarEstoque(lista_produtos)
+            relatorioCompleto(lista_produtos, usuario_logado)  # Passa o nome do usuário
             
-        elif opcao == "7":
+        elif opcao == "6":
             if lista_produtos:
-                precos = cadastrarPrecos(lista_produtos)
-                print("Preços cadastrados com sucesso!")
+                valor_total = sum(p['qntdRecebida'] * p['preco'] for p in lista_produtos)
+                print(f"\nValor total do estoque: R$ {valor_total:.2f}")
             else:
                 print("Nenhum produto cadastrado.")
                 
-        elif opcao == "8":
-            if lista_produtos and precos:
-                valor_total = calcularValorTotalEstoque(lista_produtos, precos)
-                print(f"\nValor total do estoque: R$ {valor_total:.2f}")
-            else:
-                print("É necessário ter produtos cadastrados e preços definidos.")
-                
-        elif opcao == "9":
+        elif opcao == "7":
             print("Saindo do sistema. Até logo!")
             break
             
